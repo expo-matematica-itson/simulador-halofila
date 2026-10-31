@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de la curva de crecimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab-notebook bench — the growth curve and its data are the instrument; controls and readouts sit beside it like dials and a display. */
+:root{
+  --bg:#f7f6f2; --panel:#ffffff; --fg:#22212b; --muted:#615f6e; --line:#dcd9e3;
+  --curve:#3c3489; --tangent:#c2532a; --asym:#534ab7; --ref:#9b98a6; --dot:#22212b;
+  --logi:#2a78d6; --bara:#14936a;
+  --lag:#f6ead6; --exp:#dff1ea; --stat:#e9e7fb;
+  --lag-ink:#8a5410; --exp-ink:#0f6e56; --stat-ink:#3c3489;
+  --btn:#efedf6; --btn-on:#3c3489; --btn-on-ink:#ffffff; --good:#0f6e56;
+  --display:"Literata",Georgia,"Times New Roman",serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#17161d; --panel:#201f28; --fg:#ecebf3; --muted:#a8a6b6; --line:#36343f;
+  --curve:#a9a2f2; --tangent:#ef8a5f; --asym:#9b93ee; --ref:#6f6c7c; --dot:#ecebf3;
+  --logi:#6aa8f0; --bara:#4cc79c;
+  --lag:#3a2d1a; --exp:#16352c; --stat:#26233d;
+  --lag-ink:#f0c27c; --exp-ink:#7fdcbc; --stat-ink:#c3bdf7;
+  --btn:#2b2934; --btn-on:#a9a2f2; --btn-on-ink:#17161d; --good:#7fdcbc; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#17161d; --panel:#201f28; --fg:#ecebf3; --muted:#a8a6b6; --line:#36343f;
+  --curve:#a9a2f2; --tangent:#ef8a5f; --asym:#9b93ee; --ref:#6f6c7c; --dot:#ecebf3;
+  --logi:#6aa8f0; --bara:#4cc79c;
+  --lag:#3a2d1a; --exp:#16352c; --stat:#26233d;
+  --lag-ink:#f0c27c; --exp-ink:#7fdcbc; --stat-ink:#c3bdf7;
+  --btn:#2b2934; --btn-on:#a9a2f2; --btn-on-ink:#17161d; --good:#7fdcbc; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 32px}
+.wrap{max-width:1140px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font-family:var(--display);font-weight:650;font-size:clamp(1.5rem,3.2vw,2.1rem);margin:0;text-wrap:balance;letter-spacing:-.01em}
+header p{margin:.35rem 0 0;color:var(--muted);max-width:72ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+@media (max-width:880px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.chartcard{padding:10px 10px 6px}
+svg{display:block;width:100%;height:auto}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 6px 2px}
+.toolbar .now{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;padding:2px 8px 6px;font-size:13px;color:var(--muted)}
+.legend label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.ln{display:inline-block;width:22px;height:0;border-top:3px solid}
+button{font-family:var(--body);font-size:14px;font-weight:500;color:var(--fg);background:var(--btn);border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--curve);outline-offset:2px}
+button.on{background:var(--btn-on);color:var(--btn-on-ink);border-color:var(--btn-on)}
+button.primary{background:var(--curve);color:var(--btn-on-ink);border-color:var(--curve)}
+select{font-family:var(--body);font-size:14px;color:var(--fg);background:var(--btn);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 6px;font-weight:600}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font-family:var(--mono);font-size:13px;padding:5px 9px}
+.slider{display:grid;grid-template-columns:1fr auto;gap:2px 10px;margin:10px 0 4px}
+.slider label{font-weight:600;font-size:14px}
+.slider label small{font-weight:400;color:var(--muted)}
+.slider output{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums}
+.slider input{grid-column:1/-1;width:100%}
+input[type=range]{accent-color:var(--curve)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+.sse{display:flex;justify-content:space-between;align-items:baseline;gap:10px;background:var(--btn);border-radius:8px;padding:8px 10px;margin:10px 0 4px}
+.sse b{font-family:var(--mono);font-size:16px;font-variant-numeric:tabular-nums}
+.sse small{color:var(--muted);font-size:12.5px}
+.sse .ok{color:var(--good)}
+.readouts{display:grid;grid-template-columns:1fr auto auto;gap:6px 12px;font-size:14px;align-items:baseline}
+.readouts .h{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.readouts .v{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.readouts .d{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--muted);font-size:13px}
+.readouts .d.up{color:var(--tangent)} .readouts .d.down{color:var(--exp-ink)}
+.phase{display:inline-block;padding:2px 9px;border-radius:999px;font-size:13px;font-weight:600}
+.ph-lag{background:var(--lag);color:var(--lag-ink)} .ph-exp{background:var(--exp);color:var(--exp-ink)} .ph-stat{background:var(--stat);color:var(--stat-ink)}
+.eq{font-family:var(--mono);font-size:13px;color:var(--muted);overflow-x:auto;white-space:nowrap;padding-top:4px}
+.models{width:100%;border-collapse:collapse;font-size:14px}
+.models th{font-size:12px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:600;text-align:right;padding:4px 6px;border-bottom:1px solid var(--line)}
+.models th:first-child,.models td:first-child{text-align:left}
+.models td{padding:5px 6px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;border-bottom:1px solid var(--line)}
+.models td:first-child{font-family:var(--body)}
+.models tr.best td{font-weight:600}
+.badge{display:inline-block;font-family:var(--body);font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--exp);color:var(--exp-ink);margin-left:6px}
+.lower{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:880px){.lower{grid-template-columns:minmax(0,1fr)}}
+.notes{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.notes p{margin:0;font-size:14px;color:var(--muted)}
+.notes h3{margin:0 0 2px;font-size:14px;font-weight:600}
+.foot{font-size:12.5px;color:var(--muted);max-width:95ch}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.check{display:flex;gap:6px;align-items:center;font-size:14px}
+.tablewrap{overflow-x:auto}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Simulador de la curva de crecimiento</h1>
+    <p>Los puntos son los datos de crecimiento de la bacteria halófila a cada concentración de NaCl (tres réplicas). La curva es lo que predice el modelo de Gompertz con los parámetros ajustados por mínimos cuadrados. Mueve los parámetros para ver cómo cambian las fases y cuánto empeora el ajuste.</p>
+  </header>
+
+  <div class="grid">
+    <section class="card chartcard" aria-label="Gráfica de crecimiento">
+      <svg id="chart" viewBox="0 0 760 440" role="img" aria-label="Datos de crecimiento y curva ajustada con sus tres fases"></svg>
+      <div class="legend">
+        <span><span class="ln" style="border-color:var(--curve)"></span>Gompertz</span>
+        <label for="showLogi"><input id="showLogi" type="checkbox"> <span class="ln" style="border-color:var(--logi);border-top-style:dashed"></span>Logístico</label>
+        <label for="showBara"><input id="showBara" type="checkbox"> <span class="ln" style="border-color:var(--bara);border-top-style:dotted"></span>Baranyi</label>
+        <label for="showRef"><input id="showRef" type="checkbox"> <span class="ln" style="border-color:var(--ref);border-top-style:dashed"></span>Referencia</label>
+      </div>
+      <div class="toolbar">
+        <button id="play" class="primary" type="button">Reproducir</button>
+        <button id="reset" type="button">Mostrar completa</button>
+        <label class="check" for="speed">Velocidad
+          <select id="speed"><option value="0.5">lenta</option><option value="1" selected>normal</option><option value="2">rápida</option></select>
+        </label>
+        <span class="now" id="now">t = 24.0 h</span>
+      </div>
+    </section>
+
+    <aside class="card" aria-label="Controles">
+      <p class="eyebrow">Concentración de NaCl</p>
+      <div class="presets" id="presets"></div>
+
+      <div class="slider">
+        <label for="lam"><span class="sw" style="background:var(--lag-ink)"></span>λ · fase de adaptación <small>(h)</small></label><output id="olam" for="lam"></output>
+        <input id="lam" type="range" min="0" max="10" step="0.01">
+      </div>
+      <div class="slider">
+        <label for="mu"><span class="sw" style="background:var(--tangent)"></span>μ<sub>max</sub> · velocidad máxima <small>(h⁻¹)</small></label><output id="omu" for="mu"></output>
+        <input id="mu" type="range" min="0.08" max="0.60" step="0.001">
+      </div>
+      <div class="slider">
+        <label for="A"><span class="sw" style="background:var(--asym)"></span>A · crecimiento total <small>[ln(N/N₀)]</small></label><output id="oA" for="A"></output>
+        <input id="A" type="range" min="0.3" max="3" step="0.01">
+      </div>
+
+      <div class="sse" aria-live="polite">
+        <span>Suma de cuadrados de los residuos<br><small id="sseMin"></small></span>
+        <b id="sse"></b>
+      </div>
+
+      <div class="row" style="margin:10px 0 14px">
+        <button id="fit" type="button">Volver al ajuste</button>
+        <button id="setref" type="button">Fijar como referencia</button>
+      </div>
+
+      <p class="eyebrow">Lo que significa en la práctica</p>
+      <div class="readouts" id="readouts"></div>
+      <p style="margin:12px 0 0">Fase en t actual: <span id="phase" class="phase ph-stat">Estacionaria</span></p>
+      <div class="eq">y = y₀ + A·exp{−exp[(μ<sub>max</sub>·e/A)(λ − t) + 1]}</div>
+    </aside>
+  </div>
+
+  <div class="lower">
+    <section class="card" aria-label="Comparación de modelos">
+      <p class="eyebrow">Los tres modelos ajustados a estos datos</p>
+      <div class="tablewrap"><table class="models" id="models"></table></div>
+      <p class="foot" style="margin:8px 0 0">AICc: menor valor = mejor modelo; n = 27 puntos, 4 parámetros por modelo. Los parámetros de modelos distintos no son intercambiables: el μ<sub>max</sub> de Baranyi mide una velocidad potencial, no la pendiente que se ve en la curva.</p>
+    </section>
+    <section class="card notes" aria-label="Cómo leerlo">
+      <div><h3 style="color:var(--lag-ink)">Adaptación (λ)</h3><p>La célula ajusta su maquinaria y sus solutos internos antes de dividirse. Para producir ectoína conviene corta; para conservar un alimento salado, larga.</p></div>
+      <div><h3 style="color:var(--exp-ink)">Crecimiento exponencial (μ<sub>max</sub>)</h3><p>La pendiente máxima es la velocidad de crecimiento; de ella sale el tiempo de duplicación, ln 2/μ<sub>max</sub>. Es la única fase que describe el modelo de Malthus.</p></div>
+      <div><h3 style="color:var(--stat-ink)">Estacionaria (A)</h3><p>El cultivo deja de crecer porque se agotan nutrientes o se acumulan desechos. La población se multiplicó e<sup>A</sup> veces respecto al inicio.</p></div>
+    </section>
+  </div>
+
+  <p class="foot">Modelo de Gompertz modificado (Zwietering et al., 1990), ajustado por mínimos cuadrados a las tres réplicas de cada concentración; y₀ es el nivel inicial del ajuste. Los límites de las fases son geométricos: la adaptación termina en λ, donde la tangente de pendiente μ<sub>max</sub> cruza el nivel inicial, y la fase exponencial termina donde esa tangente alcanza A.</p>
+</div>
+
+<script>
+(function(){
+  const E=Math.E, LN2=Math.LN2;
+  const T=[0,2,5,7,9,11,13,17,20];
+  const DATA={"3":{"y":[[0.0,0.2691,0.9096,1.315,1.5986,1.7996,1.9469,2.0693,2.0961],[0.0,0.2716,0.8831,1.2954,1.6207,1.8117,1.9479,2.0996,2.1644],[0.0,0.3487,1.0083,1.4129,1.664,1.8888,1.9842,2.099,2.1506]],"Gompertz":{"A":2.2982,"mu":0.223,"lam":0.1804,"y0":-0.1325,"rss":0.0322,"aicc":-171.9281},"Logístico":{"A":2.3463,"mu":0.226,"lam":0.0,"y0":-0.2458,"rss":0.0618,"aicc":-154.3454},"Baranyi":{"A":2.1456,"mu":0.3506,"lam":2.154,"y0":-0.0135,"rss":0.0387,"aicc":-166.996}},"5":{"y":[[0.0,0.2552,0.8919,1.3203,1.5674,1.8447,1.9934,2.0996,2.1254],[0.0,0.2985,0.9781,1.338,1.621,1.8121,1.9313,2.035,2.0776],[0.0,0.2246,0.8568,1.3133,1.5686,1.8234,1.9575,2.0987,2.137]],"Gompertz":{"A":2.2471,"mu":0.2248,"lam":0.5169,"y0":-0.1007,"rss":0.0236,"aicc":-180.3498},"Logístico":{"A":2.3536,"mu":0.2243,"lam":0.0,"y0":-0.2619,"rss":0.0455,"aicc":-162.603},"Baranyi":{"A":2.1327,"mu":0.3626,"lam":2.4316,"y0":-0.0184,"rss":0.0314,"aicc":-172.6282}},"10":{"y":[[0.0,0.2247,0.7947,1.1555,1.4792,1.7082,1.839,2.0164,2.0592],[0.0,0.1632,0.7211,1.0576,1.3428,1.5251,1.6937,1.8447,1.8592],[0.0,0.2375,0.7898,1.1527,1.5089,1.7087,1.8595,2.0312,2.0178]],"Gompertz":{"A":2.1113,"mu":0.1986,"lam":0.793,"y0":-0.076,"rss":0.1136,"aicc":-137.9039},"Logístico":{"A":2.2388,"mu":0.1965,"lam":0.0,"y0":-0.257,"rss":0.1247,"aicc":-135.3696},"Baranyi":{"A":2.0142,"mu":0.3449,"lam":3.0117,"y0":-0.0163,"rss":0.118,"aicc":-136.8649}},"12":{"y":[[0.0,0.1848,0.8101,1.2077,1.5296,1.7095,1.8631,1.9405,1.9577],[0.0,0.2248,0.7369,1.1306,1.3699,1.5387,1.7432,1.8025,1.8662],[0.0,0.1542,0.6895,1.0491,1.3772,1.5978,1.7243,1.8982,1.8939]],"Gompertz":{"A":1.986,"mu":0.2055,"lam":1.1562,"y0":-0.0455,"rss":0.0815,"aicc":-146.8532},"Logístico":{"A":2.171,"mu":0.1978,"lam":0.0,"y0":-0.2649,"rss":0.0875,"aicc":-144.932},"Baranyi":{"A":1.9272,"mu":0.3778,"lam":3.2692,"y0":-0.0178,"rss":0.0873,"aicc":-145.0207}},"15":{"y":[[0.0,0.1092,0.4207,0.7235,1.1037,1.2615,1.4496,1.6017,1.614],[0.0,0.0235,0.4002,0.8405,1.1324,1.3743,1.559,1.6799,1.7062],[0.0,0.0372,0.3429,0.7905,1.1062,1.3318,1.5074,1.6466,1.6881]],"Gompertz":{"A":1.6971,"mu":0.1897,"lam":2.9309,"y0":0.0022,"rss":0.0385,"aicc":-167.0998},"Logístico":{"A":1.792,"mu":0.1796,"lam":2.1289,"y0":-0.123,"rss":0.0495,"aicc":-160.3367},"Baranyi":{"A":1.6906,"mu":0.4263,"lam":5.3017,"y0":-0.025,"rss":0.0502,"aicc":-159.9255}},"20":{"y":[[0.0,0.0,0.069,0.2575,0.539,0.7768,0.9414,1.0498,1.1065],[0.0,-0.0395,0.0747,0.3107,0.5912,0.8238,0.9483,1.0804,1.0986],[0.0,-0.008,0.0837,0.3054,0.6105,0.8336,1.0102,1.1273,1.1527]],"Gompertz":{"A":1.1422,"mu":0.1464,"lam":4.957,"y0":-0.0071,"rss":0.0155,"aicc":-191.6557},"Logístico":{"A":1.1458,"mu":0.1454,"lam":4.8918,"y0":-0.0389,"rss":0.0233,"aicc":-180.6721},"Baranyi":{"A":1.1321,"mu":0.5203,"lam":7.7686,"y0":-0.0258,"rss":0.0233,"aicc":-180.7028}}};
+  const CONCS=[3,5,10,12,15,20];
+
+  const gomp=(t,p)=>p.A*Math.exp(-Math.exp(p.mu*E/p.A*(p.lam-t)+1));
+  const logi=(t,p)=>p.A/(1+Math.exp(4*p.mu/p.A*(p.lam-t)+2));
+  const bara=(t,p)=>{const h0=p.mu*Math.max(p.lam,1e-9);const B=t+Math.log(Math.exp(-p.mu*t)+Math.exp(-h0)-Math.exp(-p.mu*t-h0))/p.mu;return p.mu*B-Math.log(1+(Math.exp(p.mu*B)-1)/Math.exp(p.A));};
+  const endExp=p=>p.lam+p.A/p.mu;
+  const firstDouble=p=>{ if(p.A<=LN2) return null; const z=Math.log(-Math.log(LN2/p.A)); return p.lam+(1-z)*p.A/(p.mu*E); };
+
+  const fitOf=c=>{const g=DATA[c].Gompertz;return {lam:g.lam,mu:g.mu,A:g.A,y0:g.y0};};
+  const st=Object.assign(fitOf(3),{conc:3,custom:false,ref:Object.assign(fitOf(20),{label:"20 % NaCl"}),showRef:false,showLogi:false,showBara:false,t:null,playing:false,speed:1});
+
+  const $=id=>document.getElementById(id);
+  const svg=$("chart"), NS="http://www.w3.org/2000/svg";
+  const W=760,H=440,M={l:58,r:18,t:30,b:50}, PW=W-M.l-M.r, PH=H-M.t-M.b;
+  const YMIN=-0.45,YMAX=3.0, XMAX=24;
+  const sx=t=>M.l+t/XMAX*PW, sy=y=>M.t+(YMAX-y)/(YMAX-YMIN)*PH;
+  const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function el(name,attrs,text){const e=document.createElementNS(NS,name);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;svg.appendChild(e);return e;}
+  function path(f,p,t1){let d="";const n=240;for(let i=0;i<=n;i++){const t=t1*i/n;d+=(i?"L":"M")+sx(t).toFixed(1)+" "+sy(p.y0+f(t,p)).toFixed(1);}return d;}
+  function sse(p){let s=0;DATA[st.conc].y.forEach(r=>r.forEach((y,i)=>{const e=y-(p.y0+gomp(T[i],p));s+=e*e;}));return s;}
+
+  function marker(x,y,k,color){
+    if(k===0) el("circle",{cx:x,cy:y,r:4.2,fill:color});
+    else if(k===1) el("rect",{x:x-3.8,y:y-3.8,width:7.6,height:7.6,fill:color});
+    else el("path",{d:`M${x} ${y-4.8}L${x+4.5} ${y+3.6}L${x-4.5} ${y+3.6}Z`,fill:color});
+  }
+
+  function draw(){
+    const tNow=st.t==null?XMAX:Math.min(st.t,XMAX);
+    svg.innerHTML="";
+    const fg=css("--fg"),muted=css("--muted"),line=css("--line");
+    const p={lam:st.lam,mu:st.mu,A:st.A,y0:st.y0};
+    const b1=Math.min(p.lam,XMAX), b2=Math.min(endExp(p),XMAX);
+    const bands=[[0,b1,"--lag"],[b1,b2,"--exp"],[b2,XMAX,"--stat"]];
+    bands.forEach(([a,b,c])=>{ if(b<=a) return;
+      el("rect",{x:sx(a),y:M.t,width:sx(b)-sx(a),height:PH,fill:css(c),opacity:0.35});
+      const bb=Math.min(b,tNow); if(bb>a) el("rect",{x:sx(a),y:M.t,width:sx(bb)-sx(a),height:PH,fill:css(c),opacity:1});
+    });
+    const lbl=[[0,b1,"Adaptación","--lag-ink"],[b1,b2,"Exponencial","--exp-ink"],[b2,XMAX,"Estacionaria","--stat-ink"]];
+    lbl.forEach(([a,b,txt,c])=>{ if(sx(b)-sx(a)<54) return;
+      el("text",{x:(sx(a)+sx(b))/2,y:M.t+16,"text-anchor":"middle","font-size":12,"font-weight":600,fill:css(c),"font-family":"Public Sans, sans-serif"},txt);});
+    for(let y=0;y<=3;y++){ el("line",{x1:M.l,x2:M.l+PW,y1:sy(y),y2:sy(y),stroke:line,"stroke-width":1});
+      el("text",{x:M.l-8,y:sy(y)+4,"text-anchor":"end","font-size":12,fill:muted,"font-family":"JetBrains Mono, monospace"},y);}
+    for(let t=0;t<=XMAX;t+=4){ el("line",{x1:sx(t),x2:sx(t),y1:M.t+PH,y2:M.t+PH+5,stroke:muted});
+      el("text",{x:sx(t),y:M.t+PH+20,"text-anchor":"middle","font-size":12,fill:muted,"font-family":"JetBrains Mono, monospace"},t);}
+    el("line",{x1:M.l,x2:M.l+PW,y1:M.t+PH,y2:M.t+PH,stroke:muted,"stroke-width":1});
+    el("line",{x1:M.l,x2:M.l,y1:M.t,y2:M.t+PH,stroke:muted,"stroke-width":1});
+    el("text",{x:M.l+PW/2,y:H-8,"text-anchor":"middle","font-size":13,fill:fg,"font-family":"Public Sans, sans-serif"},"Tiempo (h)");
+    el("text",{x:14,y:M.t+PH/2,"text-anchor":"middle","font-size":13,fill:fg,transform:`rotate(-90 14 ${M.t+PH/2})`,"font-family":"Public Sans, sans-serif"},"y = ln(N/N₀)");
+    if(st.showRef){ el("path",{d:path(gomp,st.ref,XMAX),fill:"none",stroke:css("--ref"),"stroke-width":2.2,"stroke-dasharray":"6 4"});
+      const ty=st.ref.y0+gomp(XMAX*0.97,st.ref); el("text",{x:sx(XMAX)-4,y:sy(ty)-8,"text-anchor":"end","font-size":11.5,fill:css("--ref"),"font-family":"Public Sans, sans-serif"},"Referencia · "+st.ref.label);}
+    const fits=DATA[st.conc];
+    if(st.showLogi) el("path",{d:path(logi,fits["Logístico"],XMAX),fill:"none",stroke:css("--logi"),"stroke-width":2,"stroke-dasharray":"8 5"});
+    if(st.showBara) el("path",{d:path(bara,fits.Baranyi,XMAX),fill:"none",stroke:css("--bara"),"stroke-width":2.2,"stroke-dasharray":"2 4","stroke-linecap":"round"});
+    el("line",{x1:M.l,x2:M.l+PW,y1:sy(p.y0+p.A),y2:sy(p.y0+p.A),stroke:css("--asym"),"stroke-width":1.2,"stroke-dasharray":"5 4"});
+    el("text",{x:M.l+6,y:sy(p.y0+p.A)-6,"font-size":12,fill:css("--asym"),"font-weight":600,"font-family":"Public Sans, sans-serif"},`A = ${p.A.toFixed(2)}  (crece ×${Math.exp(p.A).toFixed(1)})`);
+    const te=Math.min(endExp(p),XMAX);
+    el("line",{x1:sx(p.lam),y1:sy(p.y0),x2:sx(te),y2:sy(p.y0+p.mu*(te-p.lam)),stroke:css("--tangent"),"stroke-width":1.6,"stroke-dasharray":"7 4"});
+    const ti=p.lam+p.A/(p.mu*E), yi=p.y0+p.A/E;
+    if(ti<XMAX){ const lx=Math.min(sx(ti)+16,M.l+PW-178);
+      el("text",{x:lx,y:sy(yi)+30,"font-size":12,fill:css("--tangent"),"font-weight":600,"font-family":"Public Sans, sans-serif"},`pendiente μmax = ${p.mu.toFixed(3)} h⁻¹`);}
+    if(p.lam>0.25){ const ya=sy(Math.min(0,p.y0))+16;
+      el("line",{x1:sx(0)+2,x2:sx(p.lam)-2,y1:ya,y2:ya,stroke:css("--lag-ink"),"stroke-width":1.5});
+      el("path",{d:`M${sx(0)+2} ${ya}l6 -4v8z M${sx(p.lam)-2} ${ya}l-6 -4v8z`,fill:css("--lag-ink")});
+      el("text",{x:Math.max((sx(0)+sx(p.lam))/2,M.l+26),y:ya+16,"text-anchor":"middle","font-size":12,"font-weight":600,fill:css("--lag-ink"),"font-family":"Public Sans, sans-serif"},`λ = ${p.lam.toFixed(1)} h`);}
+    el("path",{d:path(gomp,p,XMAX),fill:"none",stroke:css("--curve"),"stroke-width":2,opacity:0.25});
+    el("path",{d:path(gomp,p,tNow),fill:"none",stroke:css("--curve"),"stroke-width":3.4,"stroke-linecap":"round"});
+    // datos: visibles hasta el tiempo actual
+    const dot=css("--dot");
+    DATA[st.conc].y.forEach((r,k)=>r.forEach((y,i)=>{ if(T[i]<=tNow+1e-9) marker(sx(T[i]),sy(y),k,dot); }));
+    el("circle",{cx:sx(tNow),cy:sy(p.y0+gomp(tNow,p)),r:6,fill:css("--curve"),stroke:css("--panel"),"stroke-width":2});
+    const ph=tNow<p.lam?["Adaptación","ph-lag"]:tNow<endExp(p)?["Exponencial","ph-exp"]:["Estacionaria","ph-stat"];
+    const pe=$("phase"); pe.textContent=ph[0]; pe.className="phase "+ph[1];
+    $("now").textContent=`t = ${tNow.toFixed(1)} h · y = ${(p.y0+gomp(tNow,p)).toFixed(2)}`;
+  }
+
+  function delta(v,r,d,unit){ if(v==null||r==null||!st.showRef) return ["",""];
+    const x=v-r; if(Math.abs(x)<Math.pow(10,-d)/2) return ["=",""];
+    return [(x>0?"+":"−")+Math.abs(x).toFixed(d)+unit, x>0?"up":"down"]; }
+  function readouts(){
+    const p=st, r=st.ref;
+    const rows=[
+      ["Fase de adaptación λ",p.lam,r.lam,1," h"],
+      ["Tiempo de duplicación",LN2/p.mu,LN2/r.mu,1," h"],
+      ["Crece (veces, e^A)",Math.exp(p.A),Math.exp(r.A),1,"×"],
+      ["Primera duplicación",firstDouble(p),firstDouble(r),1," h"],
+      ["Inicio fase estacionaria",endExp(p),endExp(r),1," h"]];
+    let h=`<span class="h">Indicador</span><span class="h" style="text-align:right">Valor</span><span class="h" style="text-align:right">${st.showRef?"vs ref.":""}</span>`;
+    rows.forEach(([n,v,rv,d,u])=>{ const [dt,cls]=delta(v,rv,d,u==="×"?"×":" h");
+      h+=`<span>${n}</span><span class="v">${v==null?"no se duplica":v.toFixed(d)+u}</span><span class="d ${cls}">${dt}</span>`;});
+    $("readouts").innerHTML=h;
+    const s=sse(p), smin=DATA[st.conc].Gompertz.rss, diff=s-smin;
+    $("sse").textContent=s.toFixed(4);
+    $("sseMin").innerHTML = diff<0.00015 ? `<span class="ok">Mínima: estos son los parámetros ajustados</span>` : `Mínima con el ajuste: ${smin.toFixed(4)} (${(s/smin).toFixed(1)} veces mayor)`;
+  }
+  function modelsTable(){
+    const f=DATA[st.conc], names=["Gompertz","Logístico","Baranyi"];
+    const best=names.reduce((a,b)=>f[a].aicc<=f[b].aicc?a:b);
+    let h=`<thead><tr><th>Modelo · ${st.conc} % NaCl</th><th>λ (h)</th><th>μmax (h⁻¹)</th><th>A</th><th>SCR</th><th>AICc</th></tr></thead><tbody>`;
+    names.forEach(n=>{ const m=f[n];
+      h+=`<tr class="${n===best?"best":""}"><td>${n}${n===best?'<span class="badge">mejor</span>':""}</td><td>${m.lam.toFixed(2)}</td><td>${m.mu.toFixed(3)}</td><td>${m.A.toFixed(2)}</td><td>${m.rss.toFixed(4)}</td><td>${m.aicc.toFixed(1)}</td></tr>`;});
+    $("models").innerHTML=h+"</tbody>";
+  }
+  function syncInputs(){
+    $("lam").value=st.lam; $("mu").value=st.mu; $("A").value=st.A;
+    $("olam").textContent=st.lam.toFixed(2)+" h"; $("omu").textContent=st.mu.toFixed(3); $("oA").textContent=st.A.toFixed(2);
+    document.querySelectorAll("#presets button").forEach(b=>b.classList.toggle("on",+b.dataset.c===st.conc));
+  }
+  function update(){ syncInputs(); readouts(); modelsTable(); draw(); }
+
+  const pr=$("presets");
+  CONCS.forEach(c=>{ const b=document.createElement("button"); b.type="button"; b.textContent=c+" %"; b.dataset.c=c; b.id="preset"+c;
+    b.addEventListener("click",()=>{ Object.assign(st,fitOf(c)); st.conc=c; update(); }); pr.appendChild(b); });
+  [["lam","lam"],["mu","mu"],["A","A"]].forEach(([id,k])=>$(id).addEventListener("input",e=>{ st[k]=parseFloat(e.target.value); update(); }));
+  $("fit").addEventListener("click",()=>{ Object.assign(st,fitOf(st.conc)); update(); });
+  $("setref").addEventListener("click",()=>{ st.ref={lam:st.lam,mu:st.mu,A:st.A,y0:st.y0,label:st.conc+" % NaCl"}; st.showRef=true; $("showRef").checked=true; update(); });
+  $("showRef").addEventListener("change",e=>{ st.showRef=e.target.checked; update(); });
+  $("showLogi").addEventListener("change",e=>{ st.showLogi=e.target.checked; draw(); });
+  $("showBara").addEventListener("change",e=>{ st.showBara=e.target.checked; draw(); });
+  $("speed").addEventListener("change",e=>{ st.speed=parseFloat(e.target.value); });
+  let last=null, raf=null;
+  const reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function tick(ts){ if(!st.playing) return; if(last==null) last=ts; const dt=(ts-last)/1000; last=ts;
+    st.t+= dt*st.speed*XMAX/9; if(st.t>=XMAX){ st.t=null; st.playing=false; $("play").textContent="Reproducir"; draw(); return; }
+    draw(); raf=requestAnimationFrame(tick); }
+  $("play").addEventListener("click",()=>{
+    if(st.playing){ st.playing=false; $("play").textContent="Reanudar"; cancelAnimationFrame(raf); return; }
+    if(reduce){ st.t=null; draw(); return; }
+    if(st.t==null) st.t=0; st.playing=true; last=null; $("play").textContent="Pausa"; raf=requestAnimationFrame(tick); });
+  $("reset").addEventListener("click",()=>{ st.playing=false; cancelAnimationFrame(raf); st.t=null; $("play").textContent="Reproducir"; draw(); });
+  if(window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
+  new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  update();
+})();
+</script>
